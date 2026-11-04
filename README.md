@@ -2,12 +2,16 @@
 
 ## Запуск
 
+```bash
 docker compose up -d --wait
 docker compose exec app php artisan migrate:fresh --seed
+```
 
 ## Тесты
 
+```bash
 docker compose exec app php artisan test
+```
 
 ## Комментарии к реализации
 
@@ -25,6 +29,9 @@ docker compose exec app php artisan test
 
 1. Обернуть проверку и вставку в `DB::transaction` и захватить строку комнаты через `Room::where('id', $room->id)->lockForUpdate()->first()`. Второй запрос будет ждать завершения первого и увидит уже созданную бронь.
 2. Альтернатива для PostgreSQL — `EXCLUDE` constraint с `tstzrange(starts_at, ends_at, '[)')` и расширением `btree_gist`. База сама отклонит пересекающиеся брони на уровне индекса.
+
+## Booking API Console - web-тестер
+http://localhost:8000/test.html
 
 
 ## Задание
