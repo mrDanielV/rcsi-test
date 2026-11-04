@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 //use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Validator;
 
 class BookingController extends Controller
 {
@@ -88,7 +89,13 @@ class BookingController extends Controller
     {
         
         // $id типизирован на уровне routes/api.php
-        $booking = $request->user()->bookings()->findOrFail($id);
+        $booking = $request->user()->bookings()->find($id);
+
+        if (! $booking) {
+            $this->err('#', 'Бронь не найдена или не принадлежит вам', 404);
+            //abort(404, 'Бронь не найдена или не принадлежит вам.'); - проще, но формат возврата некрасивый
+        }
+
         $booking->delete();
 
         return response()->noContent();
@@ -125,9 +132,11 @@ class BookingController extends Controller
             ]);
     }*/
 
-    public function err(string $p = '', string $msg = '') {
-        throw ValidationException::withMessages([
-            $p =>  $msg,
-        ]);
+    public function err(string $p = '', string $msg = '', int $status = 422)
+    {
+        throw new ValidationException(
+            Validator::make([], []),
+            response()->json(['message' => $msg, 'errors' => [$p => [$msg]]], $status)
+        );
     }
 }
