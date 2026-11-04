@@ -6,7 +6,7 @@ use App\Models\Booking;
 use App\Models\Room;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+//use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -33,29 +33,27 @@ class BookingController extends Controller
         $timezone = $room->office->timezone; // Europe/Moscow или Asia/Novosibirsk
 
         // Парсим и переводим в таймзону офиса
-        $start = Carbon::parse($validated['starts_at'], $timezone)->startOfMinute();
-        $end   = Carbon::parse($validated['ends_at'], $timezone)->startOfMinute();
+        $start = Carbon::parse($validated['starts_at'], $timezone)->setTimezone($timezone)->startOfMinute();
+        $end   = Carbon::parse($validated['ends_at'], $timezone)->setTimezone($timezone)->startOfMinute();
 
+        // Относительность меток времени
+        if ($end->lessThanOrEqualTo($start)) {
+            $this->err('ends_at', 'Время окончания брони не может быть меньше времени начала');
+        }
         // Проверка шага 15 минут
         if ($start->minute % 15 !== 0 || $end->minute % 15 !== 0) {
-            throw ValidationException::withMessages([
-                'starts_at' => 'Время должно быть кратно 15 минутам.',
-            ]);
+            $this->err('starts_at', 'Время должно быть кратно 15 минутам');
         }
 
         // Проверка длительности (15 мин – 4 часа)
         $duration = $start->diffInMinutes($end);
         if ($duration < 15 || $duration > 240) {
-            throw ValidationException::withMessages([
-                'ends_at' => 'Длительность должна быть от 15 минут до 4 часов.',
-            ]);
+            $this->err('ends_at', 'Длительность должна быть от 15 минут до 4 часов');
         }
 
         // Проверка рабочего времени (09:00–20:00 по местному времени)
         if ($start->hour < 9 || $end->hour > 20 || ($end->hour === 20 && $end->minute > 0)) {
-            throw ValidationException::withMessages([
-                'starts_at' => 'Бронь должна укладываться в рабочее время 09:00–20:00.',
-            ]);
+            $this->err('starts_at', 'Бронь должна укладываться в рабочее время 09:00–20:00.');
         }
 
         // Проверка пересечений (в UTC, чтобы не зависеть от таймзоны)
@@ -68,9 +66,7 @@ class BookingController extends Controller
             ->exists();
 
         if ($conflict) {
-            throw ValidationException::withMessages([
-                'starts_at' => 'Комната занята в это время.',
-            ]);
+            $this->err('starts_at', 'Комната занята в это время');
         }
 
         // Создание 
@@ -108,5 +104,30 @@ class BookingController extends Controller
                 'time' => $b->starts_at . ' – ' . $b->ends_at,
                 'author' => $b->user->name,
             ]);
+    }
+
+    // today с исправленной логикой учета таймзоны клиента ()
+    /*public function today(Room $room)
+    {
+        $timezone = $room->office->timezone;
+        
+        // Границы «сегодня» в таймзоне офиса, переведённые в UTC
+        $startOfDay = Carbon::now($timezone)->startOfDay()->setTimezone('UTC');
+        $endOfDay   = Carbon::now($timezone)->endOfDay()->setTimezone('UTC');
+        
+        return $room->bookings()
+            ->with('user')
+            ->whereBetween('starts_at', [$startOfDay, $endOfDay])
+            ->get()
+            ->map(fn ($b) => [
+                'time' => $b->starts_at . ' – ' . $b->ends_at,
+                'author' => $b->user->name,
+            ]);
+    }*/
+
+    public function err(string $p = '', string $msg = '') {
+        throw ValidationException::withMessages([
+            $p =>  $msg,
+        ]);
     }
 }
