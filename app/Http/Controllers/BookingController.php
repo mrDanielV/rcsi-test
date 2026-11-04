@@ -6,7 +6,7 @@ use App\Models\Booking;
 use App\Models\Room;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-//use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Validator;
@@ -61,23 +61,29 @@ class BookingController extends Controller
         $startUtc = $start->copy()->setTimezone('UTC');
         $endUtc = $end->copy()->setTimezone('UTC');
 
-        $conflict = Booking::where('room_id', $room->id)
-            ->where('starts_at', '<', $endUtc) // начало существующей < конец новой
-            ->where('ends_at', '>', $startUtc)   // конец существующей > начало новой
-            ->exists();
+        // Пишем в БД
+        $booking = DB::transaction(function () use ($request, $validated, $room, $startUtc, $endUtc) {
+            // Блокируем строку комнаты — второй запрос будет ждать здесь
+            Room::where('id', $room->id)->lockForUpdate()->first();
 
-        if ($conflict) {
-            $this->err('starts_at', 'Комната занята в это время');
-        }
+            // Теперь проверка конфликта и вставка — в одной транзакции
+            $conflict = Booking::where('room_id', $room->id)
+                ->where('starts_at', '<', $endUtc)
+                ->where('ends_at', '>', $startUtc)
+                ->exists();
 
-        // Создание 
-        $booking = Booking::create([
-            'room_id' => $validated['room_id'],
-            'user_id' => $request->user()->id,
-            'title' => $validated['title'],
-            'starts_at' => $startUtc,
-            'ends_at' => $endUtc,
-        ]);
+            if ($conflict) {
+                $this->err('starts_at', 'Комната занята в это время');
+            }
+
+            return Booking::create([
+                'room_id' => $validated['room_id'],
+                'user_id' => $request->user()->id,
+                'title' => $validated['title'],
+                'starts_at' => $startUtc,
+                'ends_at' => $endUtc,
+            ]);
+        });
 
         Log::withContext(['booking_id' => $booking->id]);
         Log::channel('bookings')->info('Booking created');
