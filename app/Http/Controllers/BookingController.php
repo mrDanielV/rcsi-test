@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Validator;
 
 class BookingController extends Controller
 {
@@ -27,7 +26,7 @@ class BookingController extends Controller
             'room_id' => 'required|integer|exists:rooms,id',
             'title' => 'required|string|max:255',
             'starts_at' => 'required|date',
-            'ends_at' => 'required|date|after:starts_at',
+            'ends_at' => 'required|date',
         ]);
 
         $room = Room::with('office')->findOrFail($validated['room_id']);
@@ -37,17 +36,23 @@ class BookingController extends Controller
         $start = Carbon::parse($validated['starts_at'], $timezone)->setTimezone($timezone)->startOfMinute();
         $end   = Carbon::parse($validated['ends_at'], $timezone)->setTimezone($timezone)->startOfMinute();
 
-        // Относительность меток времени
-        if ($end->lessThanOrEqualTo($start)) {
+        // Длительность
+        $duration = (int) $start->diffInMinutes($end, false);
+        if ($duration === 0) {
+            $this->err('ends_at', 'Минимальная длительность брони — 15 минут');
+        }
+
+        // Относительность меток времени (end < start)
+        if ($duration < 0) {
             $this->err('ends_at', 'Время окончания брони не может быть меньше времени начала');
         }
+
         // Проверка шага 15 минут
         if ($start->minute % 15 !== 0 || $end->minute % 15 !== 0) {
             $this->err('starts_at', 'Время должно быть кратно 15 минутам');
         }
 
         // Проверка длительности (15 мин – 4 часа)
-        $duration = $start->diffInMinutes($end);
         if ($duration < 15 || $duration > 240) {
             $this->err('ends_at', 'Длительность должна быть от 15 минут до 4 часов');
         }
@@ -93,13 +98,10 @@ class BookingController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        
-        // $id типизирован на уровне routes/api.php
         $booking = $request->user()->bookings()->find($id);
 
         if (! $booking) {
-            $this->err('#', 'Бронь не найдена или не принадлежит вам', 404);
-            //abort(404, 'Бронь не найдена или не принадлежит вам.'); - проще, но формат возврата некрасивый
+            return response()->json(['message' => 'Бронь не найдена или не принадлежит вам'], 404);
         }
 
         $booking->delete();
@@ -138,11 +140,10 @@ class BookingController extends Controller
             ]);
     }*/
 
-    public function err(string $p = '', string $msg = '', int $status = 422)
+    private function err(string $field, string $message): never
     {
-        throw new ValidationException(
-            Validator::make([], []),
-            response()->json(['message' => $msg, 'errors' => [$p => [$msg]]], $status)
-        );
+        throw ValidationException::withMessages([
+            $field => $message,
+        ]);
     }
 }
