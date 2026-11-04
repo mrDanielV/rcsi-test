@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Booking API Console</title>
+<style>
+  :root {
+    --bg: #1e1e2e; --panel: #27293d; --border: #3a3d52;
+    --text: #e0e0e0; --muted: #9a9db0; --accent: #7c6cf0;
+    --ok: #4caf7d; --err: #e05252;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 16px; font-weight: 600; }
+  h1 span { color: var(--accent); }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input, select, textarea, button { font-family: inherit; font-size: 14px; }
+  input, select, textarea {
+    width: 100%; background: #1b1c2b; color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+  }
+  input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); }
+  textarea { min-height: 140px; resize: vertical; font-family: "Cascadia Code", "Fira Code", monospace; font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .field { margin-bottom: 12px; }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 6px;
+    padding: 10px 18px; cursor: pointer; font-weight: 600;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .toggle { display: inline-flex; gap: 16px; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .toggle label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  #result {
+    background: #11121c; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; min-height: 120px; white-space: pre-wrap; word-break: break-word;
+    font-family: "Cascadia Code", "Fira Code", monospace; font-size: 13px;
+    overflow-x: auto;
+  }
+  .status { font-size: 13px; margin-bottom: 8px; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); }
+  .hidden { display: none; }
+  code { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Booking API <span>Console</span></h1>
+
+  <div class="card">
+    <div class="field">
+      <label for="token">Bearer токен</label>
+      <input id="token" placeholder="anna-token или boris-token" value="anna-token">
+    </div>
+    <div class="field">
+      <label for="op">Операция</label>
+      <select id="op">
+        <option value="list">GET /api/bookings — Мои брони</option>
+        <option value="create">POST /api/bookings — Создать бронь</option>
+        <option value="cancel">DELETE /api/bookings/{id} — Отменить бронь</option>
+        <option value="today">GET /api/rooms/{room}/bookings/today — Брони комнаты на сегодня</option>
+      </select>
+    </div>
+
+    <!-- Поля для create -->
+    <div id="fields-create" class="hidden">
+      <div class="toggle">
+        <label><input type="radio" name="create-mode" value="fields" checked> Поля</label>
+        <label><input type="radio" name="create-mode" value="json"> JSON</label>
+      </div>
+
+      <div id="create-fields">
+        <div class="row-3">
+          <div class="field">
+            <label for="room_id">room_id</label>
+            <input id="room_id" type="number" value="1">
+          </div>
+          <div class="field">
+            <label for="title">title</label>
+            <input id="title" value="Планёрка">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="starts_at">starts_at (ISO 8601)</label>
+            <input id="starts_at" value="2026-11-05T10:00:00+03:00">
+          </div>
+          <div class="field">
+            <label for="ends_at">ends_at (ISO 8601)</label>
+            <input id="ends_at" value="2026-11-05T11:00:00+03:00">
+          </div>
+        </div>
+        <div class="hint">Можно без смещения: <code>2026-11-05T10:00:00</code> — трактуется как время офиса.</div>
+      </div>
+
+      <div id="create-json" class="hidden">
+        <div class="field">
+          <label for="json-body">Тело запроса (JSON)</label>
+          <textarea id="json-body" spellcheck="false">{
+  "room_id": 1,
+  "title": "Планёрка",
+  "starts_at": "2026-11-05T10:00:00+03:00",
+  "ends_at": "2026-11-05T11:00:00+03:00"
+}</textarea>
+        </div>
+        <div class="hint">Уйдёт как есть. Невалидный JSON будет отклонён до отправки.</div>
+      </div>
+    </div>
+
+    <!-- Поля для cancel -->
+    <div id="fields-cancel" class="hidden">
+      <div class="field">
+        <label for="booking_id">ID брони</label>
+        <input id="booking_id" type="number" value="1">
+      </div>
+    </div>
+
+    <!-- Поля для today -->
+    <div id="fields-today" class="hidden">
+      <div class="field">
+        <label for="room">ID комнаты</label>
+        <input id="room" type="number" value="1">
+      </div>
+    </div>
+
+    <button id="send">Отправить</button>
+  </div>
+
+  <div class="card">
+    <div id="status" class="status"></div>
+    <div id="result">Здесь будет ответ…</div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const BASE = 'http://localhost:8000';
+
+const op = $('op');
+const fields = {
+  create: $('fields-create'),
+  cancel: $('fields-cancel'),
+  today:  $('fields-today'),
+};
+
+function syncFields() {
+  Object.values(fields).forEach(el => el.classList.add('hidden'));
+  if (fields[op.value]) fields[op.value].classList.remove('hidden');
+}
+op.addEventListener('change', syncFields);
+syncFields();
+
+// Переключение режима create: поля / JSON
+document.querySelectorAll('input[name="create-mode"]').forEach(r => {
+  r.addEventListener('change', () => {
+    const mode = document.querySelector('input[name="create-mode"]:checked').value;
+    $('create-fields').classList.toggle('hidden', mode !== 'fields');
+    $('create-json').classList.toggle('hidden', mode !== 'json');
+  });
+});
+
+function setStatus(text, cls) {
+  const el = $('status');
+  el.textContent = text;
+  el.className = 'status ' + (cls || '');
+}
+
+function pretty(obj) {
+  try { return JSON.stringify(obj, null, 2); }
+  catch { return String(obj); }
+}
+
+async function send() {
+  const token = $('token').value.trim();
+  if (!token) { setStatus('Укажи токен', 'err'); return; }
+
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Accept': 'application/json',
+  };
+
+  let url = BASE;
+  let method = 'GET';
+  let body = null;
+
+  if (op.value === 'list') {
+    url += '/api/bookings';
+  } else if (op.value === 'create') {
+    url += '/api/bookings';
+    method = 'POST';
+    headers['Content-Type'] = 'application/json';
+
+    const mode = document.querySelector('input[name="create-mode"]:checked').value;
+    if (mode === 'json') {
+      const raw = $('json-body').value;
+      try {
+        JSON.parse(raw);
+      } catch (e) {
+        setStatus('JSON невалиден: ' + e.message, 'err');
+        return;
+      }
+      body = raw;
+    } else {
+      body = JSON.stringify({
+        room_id: Number($('room_id').value),
+        title: $('title').value,
+        starts_at: $('starts_at').value,
+        ends_at: $('ends_at').value,
+      });
+    }
+  } else if (op.value === 'cancel') {
+    url += '/api/bookings/' + encodeURIComponent($('booking_id').value);
+    method = 'DELETE';
+  } else if (op.value === 'today') {
+    url += '/api/rooms/' + encodeURIComponent($('room').value) + '/bookings/today';
+  }
+
+  $('send').disabled = true;
+  setStatus('Запрос…', '');
+  $('result').textContent = '';
+
+  try {
+    const res = await fetch(url, { method, headers, body });
+    const text = await res.text();
+    let data;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+    const cls = res.ok ? 'ok' : 'err';
+    setStatus(method + ' ' + url + ' → ' + res.status + ' ' + res.statusText, cls);
+    $('result').textContent = data === null ? '(пустой ответ)' : pretty(data);
+  } catch (e) {
+    setStatus('Сетевая ошибка: ' + e.message, 'err');
+    $('result').textContent = String(e);
+  } finally {
+    $('send').disabled = false;
+  }
+}
+
+$('send').addEventListener('click', send);
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') send();
+});
+</script>
+</body>
+</html>
