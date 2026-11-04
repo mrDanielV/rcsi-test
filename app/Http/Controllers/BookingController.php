@@ -33,8 +33,8 @@ class BookingController extends Controller
         $timezone = $room->office->timezone; // Europe/Moscow или Asia/Novosibirsk
 
         // Парсим и переводим в таймзону офиса
-        $start = Carbon::parse($validated['starts_at'])->setTimezone($timezone);
-        $end = Carbon::parse($validated['ends_at'])->setTimezone($timezone);
+        $start = Carbon::parse($validated['starts_at'], $timezone)->startOfMinute();
+        $end   = Carbon::parse($validated['ends_at'], $timezone)->startOfMinute();
 
         // Проверка шага 15 минут
         if ($start->minute % 15 !== 0 || $end->minute % 15 !== 0) {
@@ -78,19 +78,20 @@ class BookingController extends Controller
             'room_id' => $validated['room_id'],
             'user_id' => $request->user()->id,
             'title' => $validated['title'],
-            'starts_at' => $validated['starts_at'],
-            'ends_at' => $validated['ends_at'],
+            'starts_at' => $startUtc,
+            'ends_at' => $endUtc,
         ]);
 
         Log::withContext(['booking_id' => $booking->id]);
         Log::channel('bookings')->info('Booking created');
 
-        return $booking;
+        return response()->json($booking, 201);
     }
 
     public function destroy(Request $request, $id)
     {
-        //Booking::findOrFail($id)->delete();
+        
+        // $id типизирован на уровне routes/api.php
         $booking = $request->user()->bookings()->findOrFail($id);
         $booking->delete();
 
