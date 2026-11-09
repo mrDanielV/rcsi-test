@@ -73,6 +73,15 @@
       </select>
     </div>
 
+        <!-- Поля для list -->
+    <div id="fields-list" class="hidden">
+      <div class="field">
+        <label for="page">page</label>
+        <input id="page" type="number" min="1" step="1" placeholder="1">
+        <div class="hint">По 20 броней на страницу. Пусто — без параметра <code>page</code> (первая страница).</div>
+      </div>
+    </div>
+
     <!-- Поля для create -->
     <div id="fields-create" class="hidden">
       <div class="toggle">
@@ -149,6 +158,7 @@ const BASE = 'http://localhost:8000';
 
 const op = $('op');
 const fields = {
+  list:   $('fields-list'),
   create: $('fields-create'),
   cancel: $('fields-cancel'),
   today:  $('fields-today'),
@@ -194,8 +204,16 @@ async function send() {
   let method = 'GET';
   let body = null;
 
-  if (op.value === 'list') {
+    if (op.value === 'list') {
     url += '/api/bookings';
+    const page = $('page').value.trim();
+    if (page !== '') {
+      if (!/^[1-9]\d*$/.test(page)) {
+        setStatus('page должен быть целым числом ≥ 1', 'err');
+        return;
+      }
+      url += '?page=' + encodeURIComponent(page);
+    }
   } else if (op.value === 'create') {
     url += '/api/bookings';
     method = 'POST';
