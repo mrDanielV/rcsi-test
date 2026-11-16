@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Booking;
 use App\Models\Room;
+use App\Models\Office;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,7 +110,7 @@ class BookingController extends Controller
         return response()->noContent();
     }
 
-    public function today(Room $room)
+    /*public function today(Room $room)
     {
         return $room->bookings()
             ->with('user')
@@ -119,10 +120,10 @@ class BookingController extends Controller
                 'time' => $b->starts_at . ' – ' . $b->ends_at,
                 'author' => $b->user->name,
             ]);
-    }
+    }*/
 
     // today с исправленной логикой учета таймзоны клиента ()
-    /*public function today(Room $room)
+    public function today(Room $room)
     {
         $timezone = $room->office->timezone;
         
@@ -135,10 +136,63 @@ class BookingController extends Controller
             ->whereBetween('starts_at', [$startOfDay, $endOfDay])
             ->get()
             ->map(fn ($b) => [
-                'time' => $b->starts_at . ' – ' . $b->ends_at,
+                'timeUTC' => $b->starts_at . ' – ' . $b->ends_at,
+                'time' => $this->setRoomTime($room, $b->starts_at) . ' - ' . $this->setRoomTime($room, $b->ends_at),
                 'author' => $b->user->name,
             ]);
-    }*/
+    }
+
+    /**
+     * officeBookings - получение всех существующих броней по офису на дату - /offices/{office}/bookings?date={date}
+     *
+     * @param Office $office
+     * @param Request $request
+     * @return void
+     */
+    public function officeBookings(Office $office, Request $request) {
+        $validated = $request->validate([
+            'date' => 'nullable|date',
+        ]);
+
+        $timezone = $office->timezone;
+
+        // Дата - переданная или текущая
+        $date = $validated['date'] ?? null;
+        if(!$date) {
+            $date = Carbon::now($timezone)->toDateTimeString();
+        }
+
+        // Дата-день в таймзоне офиса
+        $startOfDay = Carbon::parse($date, $timezone)->startOfDay()->setTimezone('UTC');
+        $endOfDay   = Carbon::parse($date, $timezone)->endOfDay()->setTimezone('UTC');
+
+        // Все переговорные по офису
+        $rooms = Room::where('office_id', $office->id)->get();
+        if($rooms->isEmpty()) {
+            return $this->err('office_id', 'В этом офисе нет переговорных');
+        }
+        $ids = $rooms->pluck('id');
+
+        // Брони для всех переговорных по офису
+        $bookings = Booking::whereIn('room_id', $ids)
+            ->whereBetween('starts_at', [$startOfDay, $endOfDay])
+            ->with('user', 'room')
+            ->get()
+            ->map(fn ($b) => [
+                'room_id' => $b->room_id,
+                'room_name' => $b->room->name,
+                'author' => $b->user->name,
+                'time' => $this->setRoomTime($b->room, $b->starts_at) . ' - ' . $this->setRoomTime($b->room, $b->ends_at),
+                'booking_id' => $b->id,
+            ]);
+
+        return response()->json($bookings, 200);
+    }
+
+    private function setRoomTime(Room $room, \Carbon\Carbon $date) {
+        $timezone = $room->office->timezone;
+        return $date->copy()->setTimezone($timezone)->toDateTimeString();
+    }
 
     private function err(string $field, string $message): never
     {

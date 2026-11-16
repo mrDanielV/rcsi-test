@@ -8,4 +8,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bookings', [BookingController::class, 'store']);
     Route::delete('/bookings/{id}', [BookingController::class, 'destroy'])->whereNumber('id');
     Route::get('/rooms/{room}/bookings/today', [BookingController::class, 'today']);
+    Route::get('/offices/{office}/bookings', [BookingController::class, 'officeBookings'])
+        ->missing(function () {
+            return response()->json(['message' => 'Офис не найден'], 404);
+        });
 });
