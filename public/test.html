@@ -70,10 +70,11 @@
         <option value="create">POST /api/bookings — Создать бронь</option>
         <option value="cancel">DELETE /api/bookings/{id} — Отменить бронь</option>
         <option value="today">GET /api/rooms/{room}/bookings/today — Брони комнаты на сегодня</option>
+        <option value="officeBookings">GET /api/offices/{office}/bookings?date — Все брони офиса на дату</option>
       </select>
     </div>
 
-        <!-- Поля для list -->
+    <!-- Поля для list -->
     <div id="fields-list" class="hidden">
       <div class="field">
         <label for="page">page</label>
@@ -143,6 +144,22 @@
       </div>
     </div>
 
+    <!-- Поля для officeBookings -->
+    <div id="fields-officeBookings" class="hidden">
+      <div class="row">
+        <div class="field">
+          <label for="office">ID офиса</label>
+          <input id="office" type="number" value="1">
+          <div class="hint">1 — Москва, 2 — Новосибирск.</div>
+        </div>
+        <div class="field">
+          <label for="office_date">date (YYYY-MM-DD)</label>
+          <input id="office_date" type="date" value="2026-11-16">
+          <div class="hint">Пусто — сервер решит сам (например, «сегодня»).</div>
+        </div>
+      </div>
+    </div>
+
     <button id="send">Отправить</button>
   </div>
 
@@ -158,10 +175,11 @@ const BASE = 'http://localhost:8000';
 
 const op = $('op');
 const fields = {
-  list:   $('fields-list'),
-  create: $('fields-create'),
-  cancel: $('fields-cancel'),
-  today:  $('fields-today'),
+  list:           $('fields-list'),
+  create:         $('fields-create'),
+  cancel:         $('fields-cancel'),
+  today:          $('fields-today'),
+  officeBookings: $('fields-officeBookings'),
 };
 
 function syncFields() {
@@ -204,7 +222,7 @@ async function send() {
   let method = 'GET';
   let body = null;
 
-    if (op.value === 'list') {
+  if (op.value === 'list') {
     url += '/api/bookings';
     const page = $('page').value.trim();
     if (page !== '') {
@@ -242,6 +260,13 @@ async function send() {
     method = 'DELETE';
   } else if (op.value === 'today') {
     url += '/api/rooms/' + encodeURIComponent($('room').value) + '/bookings/today';
+  } else if (op.value === 'officeBookings') {
+    const office = $('office').value.trim();
+    const date = $('office_date').value.trim();
+    url += '/api/offices/' + encodeURIComponent(office) + '/bookings';
+    if (date !== '') {
+      url += '?date=' + encodeURIComponent(date);
+    }
   }
 
   $('send').disabled = true;
