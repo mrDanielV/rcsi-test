@@ -15,9 +15,17 @@ class BookingController extends Controller
 {
     public function index(Request $request)
     {
-        return Booking::where('user_id', $request->user()->id)
+         return Booking::where('user_id', $request->user()->id)
+            ->with('room')
             ->orderByRaw('starts_at DESC')
-            ->paginate(20);
+            ->paginate(20)
+            ->through(fn ($b) => [
+                'id' => $b->id,
+                'title' => $b->title,
+                'room' => $b->room->name,
+                'starts_at' => $b->starts_at,
+                'ends_at' => $b->ends_at,
+            ]);
     }
 
     public function store(Request $request)
@@ -63,6 +71,17 @@ class BookingController extends Controller
             $this->err('starts_at', 'Бронь должна укладываться в рабочее время 09:00–20:00.');
         }
 
+        // Бронировать можно не более чем за N дней
+        /*$n = 30;
+        if ($start->greaterThan(Carbon::now($timezone)->addDays($n))) {
+            $this->err('starts_at', 'Бронировать можно не более чем за '.$n.' дней');
+        }*/
+
+        // Бронировать можно только в будние дни
+        /*if ($start->isWeekend()) {
+            $this->err('starts_at', 'Бронировать можно только в будние дни');
+        }*/
+
         // Проверка пересечений (в UTC, чтобы не зависеть от таймзоны)
         $startUtc = $start->copy()->setTimezone('UTC');
         $endUtc = $end->copy()->setTimezone('UTC');
@@ -74,6 +93,7 @@ class BookingController extends Controller
 
             // Теперь проверка конфликта и вставка — в одной транзакции
             $conflict = Booking::where('room_id', $room->id)
+                //->where('user_id', '!=', $request->user()->id) - разрешить пересечение своих броней
                 ->where('starts_at', '<', $endUtc)
                 ->where('ends_at', '>', $startUtc)
                 ->exists();
@@ -199,5 +219,7 @@ class BookingController extends Controller
         throw ValidationException::withMessages([
             $field => $message,
         ]);
+
+        // abort(422, $message);
     }
 }
