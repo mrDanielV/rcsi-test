@@ -163,11 +163,11 @@ class BookingController extends Controller
     }
 
     /**
-     * officeBookings - получение всех существующих броней по офису на дату - /offices/{office}/bookings?date={date}
+     * officeBookings - получение всех существующих броней по офису на дату - GET: <url>/offices/{office}/bookings?date={date}
      *
      * @param Office $office
      * @param Request $request
-     * @return void
+     * @return json {room_id, room_name, author, time, booking_id}
      */
     public function officeBookings(Office $office, Request $request) {
         $validated = $request->validate([
@@ -209,7 +209,9 @@ class BookingController extends Controller
         return response()->json($bookings, 200);
     }
 
-    private function setRoomTime(Room $room, \Carbon\Carbon $date) {
+    // Перевод даты $date в таймзону офиса-переговорки
+    private function setRoomTime(Room $room, \Carbon\Carbon $date) 
+    {
         $timezone = $room->office->timezone;
         return $date->copy()->setTimezone($timezone)->toDateTimeString();
     }
@@ -221,5 +223,6 @@ class BookingController extends Controller
         ]);
 
         // abort(422, $message);
+        // response()->json(['message' => ''], 404);
     }
 }
